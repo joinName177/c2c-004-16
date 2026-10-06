@@ -1,5 +1,5 @@
 import { intersects, rotationsOf } from './geometry';
-import { itemVolume, suitcaseVolume, type PackingItem, type PackingPlan, type Placement, type PlanMode, type Suitcase } from './models';
+import { itemVolume, suitcaseVolume, weightCeilings, type PackingItem, type PackingPlan, type Placement, type PlanMode, type Suitcase } from './models';
 
 const PLAN_NAMES: Record<PlanMode, string> = { minimal: '精简版', comfort: '舒适版', shopping: '购物版' };
 const RESERVE: Record<PlanMode, number> = { minimal: 0.8, comfort: 1, shopping: 0.65 };
@@ -10,6 +10,8 @@ export function validateSuitcase(suitcase: Suitcase): string[] {
   if (!(suitcase.width > 0)) errors.push('行李箱宽度必须大于 0');
   if (!(suitcase.height > 0)) errors.push('行李箱高度必须大于 0');
   if (!(suitcase.maxWeight > 0)) errors.push('承重必须大于 0');
+  if (suitcase.emptyWeight < 0 || !Number.isFinite(suitcase.emptyWeight)) errors.push('空箱重量不能为负');
+  if (suitcase.weightLimit < 0 || !Number.isFinite(suitcase.weightLimit)) errors.push('整箱总重上限不能为负');
   return errors;
 }
 
@@ -39,7 +41,7 @@ export function packItems(suitcase: Suitcase, items: PackingItem[], mode: PlanMo
   const placements: Placement[] = [];
   const unplaced: PackingPlan['unplaced'] = [];
   const capacity = suitcaseVolume(suitcase) * RESERVE[mode];
-  const maxWeight = suitcase.maxWeight * RESERVE[mode];
+  const { itemWeightLimit, grossWeightLimit, weightLimitBound } = weightCeilings(suitcase, RESERVE[mode]);
   let totalWeight = 0;
   let usedVolume = 0;
 
@@ -48,8 +50,8 @@ export function packItems(suitcase: Suitcase, items: PackingItem[], mode: PlanMo
       unplaced.push({ item, reason: '尺寸或重量无效' });
       continue;
     }
-    if (totalWeight + item.weight > maxWeight) {
-      unplaced.push({ item, reason: '超过当前方案承重预留' });
+    if (totalWeight + item.weight > itemWeightLimit) {
+      unplaced.push({ item, reason: weightLimitBound ? '超过当前方案整箱总重预留' : '超过当前方案承重预留' });
       continue;
     }
     if (usedVolume + itemVolume(item) > capacity) {
@@ -81,12 +83,20 @@ export function packItems(suitcase: Suitcase, items: PackingItem[], mode: PlanMo
     usedVolume += itemVolume(item);
   }
 
+  const emptyWeight = suitcase.emptyWeight || 0;
+  const grossWeight = totalWeight + emptyWeight;
   return {
     id: mode,
     name: PLAN_NAMES[mode],
     placements,
     unplaced,
     totalWeight,
+    emptyWeight,
+    grossWeight,
+    itemWeightLimit,
+    grossWeightLimit,
+    weightLimitBound,
+    remainingWeight: grossWeightLimit - grossWeight,
     usedVolume,
     capacityRatio: suitcaseVolume(suitcase) ? usedVolume / suitcaseVolume(suitcase) : 0,
   };

@@ -55,4 +55,20 @@ describe('Luggage planner App', () => {
     await wrapper.get('[data-testid="print-button"]').trigger('click');
     expect(getPrintCount()).toBe(1);
   });
+
+  it('shows item, empty, gross and remaining weights and recalibrates per plan', async () => {
+    const { wrapper } = render();
+    const comfort = wrapper.get('[data-plan="comfort"]');
+    expect(comfort.text()).toContain('空箱');
+    expect(comfort.text()).toContain('2.6');
+    expect(comfort.text()).toContain('整箱');
+    expect(comfort.text()).toContain('剩余');
+    expect(wrapper.text()).toContain('重量明细');
+
+    await wrapper.get('[data-plan="shopping"]').trigger('click');
+    const shopping = wrapper.get('[data-plan="shopping"]');
+    expect(shopping.text()).toContain('整箱 5.9/6.5 kg · 剩余 0.6');
+    expect(wrapper.get('[data-plan="comfort"]').text()).toContain('整箱 5.9/10.0 kg · 剩余 4.1');
+    expect(wrapper.get('[data-plan="minimal"]').text()).toContain('整箱 5.9/8.0 kg · 剩余 2.1');
+  });
 });

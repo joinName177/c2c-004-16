@@ -36,4 +36,14 @@ describe('LocalPlannerRepository', () => {
     expect(result.value.items.length).toBeGreaterThan(0);
     expect(result.warning).toContain('已恢复示例');
   });
+
+  it('defaults empty box weight and total weight limit to zero for legacy snapshots', () => {
+    const legacy = createSampleSnapshot();
+    delete (legacy.suitcase as Partial<typeof legacy.suitcase>).emptyWeight;
+    delete (legacy.suitcase as Partial<typeof legacy.suitcase>).weightLimit;
+    storage.setItem('c2c-004.planner', JSON.stringify(legacy));
+    const suitcase = new LocalPlannerRepository(storage).load().value.suitcase;
+    expect(suitcase.emptyWeight).toBe(0);
+    expect(suitcase.weightLimit).toBe(0);
+  });
 });

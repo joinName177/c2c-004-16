@@ -6,7 +6,7 @@ const seed = (id: string, name: string, category: string, dimensions: [number, n
 
 export function createSampleSnapshot(): PackingSnapshot {
   return {
-    suitcase: { length: 52, width: 35, height: 23, maxWeight: 10 },
+    suitcase: { length: 52, width: 35, height: 23, maxWeight: 10, emptyWeight: 2.6, weightLimit: 10 },
     selectedPlan: 'comfort',
     items: [
       seed('jacket', '轻薄外套', '衣物', [30, 24, 5], 0.65, 3, true),

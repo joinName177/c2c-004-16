@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { packItems, validateSuitcase } from '../packing-engine';
-import type { PackingItem, Suitcase } from '../models';
+import { weightCeilings, type PackingItem, type Suitcase } from '../models';
 
-const suitcase = (overrides: Partial<Suitcase> = {}): Suitcase => ({ length: 10, width: 8, height: 6, maxWeight: 10, ...overrides });
+const suitcase = (overrides: Partial<Suitcase> = {}): Suitcase => ({ length: 10, width: 8, height: 6, maxWeight: 10, emptyWeight: 0, weightLimit: 0, ...overrides });
 const item = (id: string, overrides: Partial<PackingItem> = {}): PackingItem => ({
   id, name: id, category: '衣物', length: 3, width: 2, height: 1, weight: 1, priority: 2, mustHave: false, ...overrides,
 });
@@ -12,6 +12,22 @@ describe('validateSuitcase', () => {
     expect(validateSuitcase(suitcase({ height: 0 }))).toContain('行李箱高度必须大于 0');
     expect(validateSuitcase(suitcase({ maxWeight: -1 }))).toContain('承重必须大于 0');
   });
+
+  it('rejects a negative empty box weight or total weight limit', () => {
+    expect(validateSuitcase(suitcase({ emptyWeight: -0.1 }))).toContain('空箱重量不能为负');
+    expect(validateSuitcase(suitcase({ weightLimit: -1 }))).toContain('整箱总重上限不能为负');
+  });
+});
+
+describe('weightCeilings', () => {
+  it('uses the smaller of bearing capacity and total limit minus empty weight', () => {
+    expect(weightCeilings(suitcase({ maxWeight: 10, emptyWeight: 2, weightLimit: 8 }), 1)).toMatchObject({ itemWeightLimit: 6, weightLimitBound: true });
+    expect(weightCeilings(suitcase({ maxWeight: 7, emptyWeight: 2, weightLimit: 12 }), 1)).toMatchObject({ itemWeightLimit: 7, weightLimitBound: false });
+  });
+
+  it('falls back to the bearing rule when the total limit is unset or zero', () => {
+    expect(weightCeilings(suitcase({ maxWeight: 10, emptyWeight: 3 }), 1)).toMatchObject({ itemWeightLimit: 10, grossWeightLimit: 13, weightLimitBound: false });
+  });
 });
 
 describe('packItems', () => {
@@ -19,6 +35,35 @@ describe('packItems', () => {
     const plan = packItems(suitcase({ maxWeight: 2 }), [item('a'), item('b')], 'comfort');
     expect(plan.placements).toHaveLength(2);
     expect(plan.totalWeight).toBe(2);
+  });
+
+  it('limits packed items by gross limit minus empty box weight', () => {
+    const plan = packItems(suitcase({ maxWeight: 10, emptyWeight: 3, weightLimit: 5 }), [item('a'), item('b'), item('c')], 'comfort');
+    expect(plan.totalWeight).toBeLessThanOrEqual(2);
+    expect(plan.grossWeight).toBe(plan.totalWeight + 3);
+    expect(plan.grossWeight).toBeLessThanOrEqual(5);
+    expect(plan.unplaced[0]?.reason).toContain('整箱总重');
+  });
+
+  it('allows gross weight exactly at the total limit', () => {
+    const plan = packItems(suitcase({ emptyWeight: 2, weightLimit: 4 }), [item('a'), item('b')], 'comfort');
+    expect(plan.placements).toHaveLength(2);
+    expect(plan.grossWeight).toBe(4);
+    expect(plan.remainingWeight).toBe(0);
+  });
+
+  it('packs nothing when the empty box alone exceeds the total limit', () => {
+    const plan = packItems(suitcase({ emptyWeight: 6, weightLimit: 5 }), [item('a')], 'comfort');
+    expect(plan.placements).toHaveLength(0);
+    expect(plan.remainingWeight).toBeLessThan(0);
+  });
+
+  it('reports all weight calibers for the generated plan', () => {
+    const plan = packItems(suitcase({ emptyWeight: 2, weightLimit: 9 }), [item('a'), item('b')], 'comfort');
+    expect(plan.emptyWeight).toBe(2);
+    expect(plan.grossWeight).toBe(4);
+    expect(plan.grossWeightLimit).toBe(9);
+    expect(plan.remainingWeight).toBe(5);
   });
 
   it('uses rotation when the original orientation does not fit', () => {
