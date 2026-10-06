@@ -1,12 +1,40 @@
 import { rotationsOf } from './geometry';
+import { planWeightSummary } from './weight';
 import type { PackingItem, PackingPlan, Risk, Suitcase } from './models';
 
 export function detectRisks(plan: PackingPlan, suitcase: Suitcase, items: PackingItem[]): Risk[] {
   const risks: Risk[] = [];
   const byId = new Map(items.map((item) => [item.id, item]));
+  const weight = planWeightSummary(plan, suitcase);
 
-  if (plan.totalWeight > suitcase.maxWeight) risks.push({ id: 'overweight', severity: 'critical', title: '行李超重', message: `超出承重 ${(plan.totalWeight - suitcase.maxWeight).toFixed(1)} kg，请移除重物。` });
-  else if (plan.totalWeight / suitcase.maxWeight > 0.9) risks.push({ id: 'near-weight', severity: 'warning', title: '接近承重上限', message: '建议预留至少 10% 承重余量。' });
+  // 空箱本身已超限时必须先提示箱体超限，不能靠移除物品显示安全
+  if (weight.boxOverLimit) {
+    risks.push({
+      id: 'box-overweight',
+      severity: 'critical',
+      title: '空箱已超过整箱总重上限',
+      message: `空箱重 ${weight.emptyWeight.toFixed(1)} kg，已超过总重上限 ${weight.weightLimit.toFixed(1)} kg，即使不装任何物品也超限，请更换行李箱或提高限额。`,
+    });
+  } else if (weight.remainingWeight < 0) {
+    risks.push({
+      id: 'overweight',
+      severity: 'critical',
+      title: weight.grossLimited ? '整箱总重超限' : '行李超重',
+      message: weight.grossLimited
+        ? `整箱总重 ${weight.grossWeight.toFixed(1)} kg（含空箱 ${weight.emptyWeight.toFixed(1)} kg），超出总重上限 ${(-weight.remainingWeight).toFixed(1)} kg，请移除重物。`
+        : `超出承重 ${(-weight.remainingWeight).toFixed(1)} kg，请移除重物。`,
+    });
+  } else if (weight.weightLimit > 0 && weight.remainingWeight > 0
+    && (weight.grossLimited ? weight.grossWeight : weight.itemWeight) / weight.weightLimit > 0.9) {
+    risks.push({
+      id: 'near-weight',
+      severity: 'warning',
+      title: weight.grossLimited ? '接近整箱总重上限' : '接近承重上限',
+      message: weight.grossLimited
+        ? `整箱总重已达上限的九成以上（含空箱 ${weight.emptyWeight.toFixed(1)} kg），建议预留至少 10% 余量。`
+        : '建议预留至少 10% 承重余量。',
+    });
+  }
   if (plan.capacityRatio > 0.9) risks.push({ id: 'high-volume', severity: 'warning', title: '空间接近满载', message: '空间利用率超过 90%，返程新增物品可能无法装入。' });
 
   for (const { item } of plan.unplaced) {

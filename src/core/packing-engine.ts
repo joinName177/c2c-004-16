@@ -1,4 +1,5 @@
 import { intersects, rotationsOf } from './geometry';
+import { effectivePayload } from './weight';
 import { itemVolume, suitcaseVolume, type PackingItem, type PackingPlan, type Placement, type PlanMode, type Suitcase } from './models';
 
 const PLAN_NAMES: Record<PlanMode, string> = { minimal: '精简版', comfort: '舒适版', shopping: '购物版' };
@@ -10,6 +11,8 @@ export function validateSuitcase(suitcase: Suitcase): string[] {
   if (!(suitcase.width > 0)) errors.push('行李箱宽度必须大于 0');
   if (!(suitcase.height > 0)) errors.push('行李箱高度必须大于 0');
   if (!(suitcase.maxWeight > 0)) errors.push('承重必须大于 0');
+  if (!Number.isFinite(suitcase.emptyWeight) || suitcase.emptyWeight < 0) errors.push('空箱重量不能为负');
+  if (!Number.isFinite(suitcase.grossWeightLimit) || suitcase.grossWeightLimit < 0) errors.push('整箱总重上限不能为负');
   return errors;
 }
 
@@ -39,7 +42,8 @@ export function packItems(suitcase: Suitcase, items: PackingItem[], mode: PlanMo
   const placements: Placement[] = [];
   const unplaced: PackingPlan['unplaced'] = [];
   const capacity = suitcaseVolume(suitcase) * RESERVE[mode];
-  const maxWeight = suitcase.maxWeight * RESERVE[mode];
+  // 装箱可用物品重量 = 承重与（总重上限 − 空箱）的较小值，再叠加方案预留系数
+  const maxWeight = effectivePayload(suitcase) * RESERVE[mode];
   let totalWeight = 0;
   let usedVolume = 0;
 
@@ -49,7 +53,7 @@ export function packItems(suitcase: Suitcase, items: PackingItem[], mode: PlanMo
       continue;
     }
     if (totalWeight + item.weight > maxWeight) {
-      unplaced.push({ item, reason: '超过当前方案承重预留' });
+      unplaced.push({ item, reason: '超过当前方案可用物品重量（已扣除空箱与预留）' });
       continue;
     }
     if (usedVolume + itemVolume(item) > capacity) {

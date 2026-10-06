@@ -2,6 +2,7 @@ import { computed, reactive, ref } from 'vue';
 import { createSampleSnapshot } from '../core/sample-data';
 import { generatePlans } from '../core/plan-service';
 import { detectRisks } from '../core/risk-engine';
+import { planWeightSummary } from '../core/weight';
 import type { PackingItem, PackingSnapshot, PlanMode, Suitcase } from '../core/models';
 import type { PlannerRepository } from '../ports/planner-repository.port';
 import type { PrintPort } from '../ports/print.port';
@@ -16,6 +17,8 @@ export function usePlanner({ repository, printPort }: PlannerDependencies) {
   const plans = ref(generatePlans(state.suitcase, state.items));
   const currentPlan = computed(() => plans.value[state.selectedPlan]);
   const risks = computed(() => detectRisks(currentPlan.value, state.suitcase, state.items));
+  // 所有重量口径跟随当前方案一起切换
+  const weightSummary = computed(() => planWeightSummary(currentPlan.value, state.suitcase));
 
   const save = () => repository.save(JSON.parse(JSON.stringify(state)) as PackingSnapshot);
   const markStale = () => { isStale.value = true; save(); };
@@ -39,5 +42,5 @@ export function usePlanner({ repository, printPort }: PlannerDependencies) {
     save();
   }
 
-  return { state, notice, isStale, plans, currentPlan, risks, addItem, updateItem, removeItem, updateSuitcase, regenerate, selectPlan, resetSample, print: () => printPort.print() };
+  return { state, notice, isStale, plans, currentPlan, weightSummary, risks, addItem, updateItem, removeItem, updateSuitcase, regenerate, selectPlan, resetSample, print: () => printPort.print() };
 }

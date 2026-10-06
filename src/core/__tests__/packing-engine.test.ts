@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { packItems, validateSuitcase } from '../packing-engine';
 import type { PackingItem, Suitcase } from '../models';
 
-const suitcase = (overrides: Partial<Suitcase> = {}): Suitcase => ({ length: 10, width: 8, height: 6, maxWeight: 10, ...overrides });
+const suitcase = (overrides: Partial<Suitcase> = {}): Suitcase => ({ length: 10, width: 8, height: 6, maxWeight: 10, emptyWeight: 0, grossWeightLimit: 0, ...overrides });
 const item = (id: string, overrides: Partial<PackingItem> = {}): PackingItem => ({
   id, name: id, category: '衣物', length: 3, width: 2, height: 1, weight: 1, priority: 2, mustHave: false, ...overrides,
 });
@@ -19,6 +19,36 @@ describe('packItems', () => {
     const plan = packItems(suitcase({ maxWeight: 2 }), [item('a'), item('b')], 'comfort');
     expect(plan.placements).toHaveLength(2);
     expect(plan.totalWeight).toBe(2);
+  });
+
+  it('uses gross limit minus empty weight as the packable item weight', () => {
+    // 可用物品重量 = min(承重10, 总重3 − 空箱1.5) = 1.5
+    const packable = suitcase({ maxWeight: 10, emptyWeight: 1.5, grossWeightLimit: 3 });
+    const plan = packItems(packable, [item('a'), item('b')], 'comfort');
+    expect(plan.placements).toHaveLength(1);
+    expect(plan.totalWeight).toBe(1);
+    expect(plan.unplaced[0]?.reason).toContain('可用物品重量');
+  });
+
+  it('places nothing when the empty box alone already exceeds the gross limit', () => {
+    const overBox = suitcase({ maxWeight: 10, emptyWeight: 4, grossWeightLimit: 3 });
+    const plan = packItems(overBox, [item('a')], 'comfort');
+    expect(plan.placements).toHaveLength(0);
+    expect(plan.unplaced[0]?.reason).toContain('可用物品重量');
+  });
+
+  it('allows item weight exactly at the gross-derived payload', () => {
+    // 可用物品重量恰好为 2
+    const packable = suitcase({ maxWeight: 10, emptyWeight: 1, grossWeightLimit: 3 });
+    const plan = packItems(packable, [item('a'), item('b')], 'comfort');
+    expect(plan.placements).toHaveLength(2);
+    expect(plan.totalWeight).toBe(2);
+  });
+
+  it('ignores empty weight for packing when the gross limit is not set', () => {
+    const packable = suitcase({ maxWeight: 2, emptyWeight: 5, grossWeightLimit: 0 });
+    const plan = packItems(packable, [item('a'), item('b')], 'comfort');
+    expect(plan.placements).toHaveLength(2);
   });
 
   it('uses rotation when the original orientation does not fit', () => {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { generatePlans } from '../plan-service';
 import type { PackingItem, Suitcase } from '../models';
 
-const box: Suitcase = { length: 10, width: 8, height: 6, maxWeight: 10 };
+const box: Suitcase = { length: 10, width: 8, height: 6, maxWeight: 10, emptyWeight: 0, grossWeightLimit: 0 };
 const item = (id: string, overrides: Partial<PackingItem> = {}): PackingItem => ({ id, name: id, category: '衣物', length: 4, width: 2, height: 2, weight: 1, priority: 1, mustHave: false, ...overrides });
 
 describe('generatePlans', () => {

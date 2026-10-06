@@ -36,4 +36,17 @@ describe('LocalPlannerRepository', () => {
     expect(result.value.items.length).toBeGreaterThan(0);
     expect(result.warning).toContain('已恢复示例');
   });
+
+  it('migrates legacy snapshots without empty weight and gross limit fields', () => {
+    storage.setItem('c2c-004.planner', JSON.stringify({
+      suitcase: { length: 40, width: 25, height: 20, maxWeight: 8 },
+      items: [],
+      selectedPlan: 'minimal',
+    }));
+    const result = new LocalPlannerRepository(storage).load();
+    expect(result.value.suitcase.length).toBe(40);
+    expect(result.value.suitcase.emptyWeight).toBe(0);
+    expect(result.value.suitcase.grossWeightLimit).toBe(0);
+    expect(result.value.selectedPlan).toBe('minimal');
+  });
 });
